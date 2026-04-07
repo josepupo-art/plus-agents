@@ -27,21 +27,16 @@ EXPECTED_HEADERS = [
 
 
 def get_credentials():
-    creds = None
+    import json
+    import os
+    from google.oauth2.service_account import Credentials
 
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "rb") as token:
-            creds = pickle.load(token)
+    sa_json = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"])
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-
-        with open(TOKEN_FILE, "wb") as token:
-            pickle.dump(creds, token)
+    creds = Credentials.from_service_account_info(
+        sa_json,
+        scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
 
     return creds
 
