@@ -9,7 +9,7 @@ __pycache__/
 # Archivos pesados innecesarios
 *.xlsx
 *.pdf
-*.txt
+
 
 # Carpetas no necesarias
 diapos verticales para links del agente/
