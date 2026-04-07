@@ -1,0 +1,15 @@
+# Entorno
+.env
+secrets/
+
+# Python
+__pycache__/
+*.pyc
+
+# Archivos pesados innecesarios
+*.xlsx
+*.pdf
+*.txt
+
+# Carpetas no necesarias
+diapos verticales para links del agente/
