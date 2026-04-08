@@ -2,13 +2,15 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from sheets_client import log_message
+
+# ❌ DESACTIVADO: Google Sheets
+# from sheets_client import log_message
 
 load_dotenv(r"C:\plus-agents\.env")
 
 from sales_agent import run_sales_pipeline
 
-app = Flask(__name__)
+app = Flask(_name_)
 
 VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "plusaligners_verify_2026")
 GRAPH_VERSION = os.getenv("WA_GRAPH_VERSION", "v22.0")
@@ -119,20 +121,14 @@ def webhook_post():
                             continue
 
                         print(f"➡️ INBOUND from {from_wa} ({contact_name}): {inbound_text}")
-                        log_message(
-    from_wa,
-    contact_name,
-    inbound_text,
-    "inbound"
-)
+
+                        # ❌ DESACTIVADO Sheets
+                        # log_message(from_wa, contact_name, inbound_text, "inbound")
 
                         reply_text = run_sales_pipeline(inbound_text, from_wa)
-                        log_message(
-    from_wa,
-    contact_name,
-    reply_text,
-    "outbound"
-)
+
+                        # ❌ DESACTIVADO Sheets
+                        # log_message(from_wa, contact_name, reply_text, "outbound")
 
                         if not reply_text or not reply_text.strip():
                             reply_text = "¿En qué puedo ayudarte, doc?"
@@ -149,7 +145,6 @@ def webhook_post():
     return jsonify({"ok": True}), 200
 
 
-if __name__ == "_main_":
-    import os
+if __name__ == "main":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
