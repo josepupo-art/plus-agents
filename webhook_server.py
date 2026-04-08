@@ -1,16 +1,17 @@
 import os
+os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = "{}"
 import requests
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
-# ❌ DESACTIVADO: Google Sheets
-# from sheets_client import log_message
+
+
 
 load_dotenv(r"C:\plus-agents\.env")
 
 from sales_agent import run_sales_pipeline
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "plusaligners_verify_2026")
 GRAPH_VERSION = os.getenv("WA_GRAPH_VERSION", "v22.0")
