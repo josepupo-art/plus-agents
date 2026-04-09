@@ -7,3 +7,4 @@ google-auth-oauthlib
 crewai
 openai
 gunicorn
+psycopg2-binary

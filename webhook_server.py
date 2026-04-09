@@ -1,15 +1,16 @@
 import os
+
+# Parche para evitar crash si alguna parte vieja todavía busca esta variable
 os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = "{}"
+
 import requests
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
-
-
+from db import init_db, save_message
+from sales_agent import run_sales_pipeline
 
 load_dotenv(r"C:\plus-agents\.env")
-
-from sales_agent import run_sales_pipeline
 
 app = Flask(__name__)
 
@@ -26,6 +27,13 @@ print("GRAPH_VERSION:", GRAPH_VERSION)
 print("===========================")
 
 SEEN_MESSAGE_IDS = set()
+
+# Inicializa tabla al arrancar
+try:
+    init_db()
+    print("✅ Base de datos inicializada")
+except Exception as e:
+    print("❌ Error inicializando DB:", repr(e))
 
 
 def safe_str(x):
@@ -123,18 +131,33 @@ def webhook_post():
 
                         print(f"➡️ INBOUND from {from_wa} ({contact_name}): {inbound_text}")
 
-                        # ❌ DESACTIVADO Sheets
-                        # log_message(from_wa, contact_name, inbound_text, "inbound")
+                        # Guardar inbound
+                        try:
+                            save_message(from_wa, contact_name, inbound_text, "inbound")
+                        except Exception as db_in_error:
+                            print("❌ Error guardando inbound en DB:", repr(db_in_error))
 
-                        reply_text = run_sales_pipeline(inbound_text, from_wa)
+                        # Ejecutar agente
+                        reply = run_sales_pipeline(inbound_text, from_wa)
 
-                        # ❌ DESACTIVADO Sheets
-                        # log_message(from_wa, contact_name, reply_text, "outbound")
+                        # Si el agente devuelve tupla, tomar la respuesta
+                        if isinstance(reply, tuple):
+                            reply_text = safe_str(reply[0])
+                        else:
+                            reply_text = safe_str(reply)
 
-                        if not reply_text or not reply_text.strip():
+                        if not reply_text.strip():
                             reply_text = "¿En qué puedo ayudarte, doc?"
 
                         print(f"⬅️ OUTBOUND to {from_wa}: {reply_text}")
+
+                        # Guardar outbound
+                        try:
+                            save_message(from_wa, contact_name, reply_text, "outbound")
+                        except Exception as db_out_error:
+                            print("❌ Error guardando outbound en DB:", repr(db_out_error))
+
+                        # Enviar WhatsApp
                         wa_send_text(from_wa, reply_text)
 
                     except Exception as msg_error:
@@ -146,6 +169,6 @@ def webhook_post():
     return jsonify({"ok": True}), 200
 
 
-if __name__ == "main":
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
