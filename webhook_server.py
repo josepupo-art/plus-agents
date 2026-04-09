@@ -9,7 +9,30 @@ from dotenv import load_dotenv
 
 from db import init_db, save_message, get_conversations, get_messages_by_phone
 from sales_agent import run_sales_pipeline
+from functools import wraps
+from flask import request, Response
 
+PANEL_USER = os.getenv("PANEL_USER", "admin")
+PANEL_PASSWORD = os.getenv("PANEL_PASSWORD", "1234")
+
+def check_auth(username, password):
+    return username == PANEL_USER and password == PANEL_PASSWORD
+
+def authenticate():
+    return Response(
+        'Acceso restringido',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Login requerido"'}
+    )
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
 load_dotenv(r"C:\plus-agents\.env")
 
 app = Flask(__name__)
@@ -164,6 +187,7 @@ def webhook_post():
 
 
 @app.get("/panel")
+@requires_auth
 def panel():
     try:
         conversations = get_conversations()
@@ -221,6 +245,7 @@ def panel():
 
 
 @app.get("/panel/chat/<phone>")
+@requires_auth
 def panel_chat(phone):
     try:
         messages = get_messages_by_phone(phone)
