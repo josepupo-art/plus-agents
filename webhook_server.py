@@ -4,10 +4,10 @@ import os
 os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = "{}"
 
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string, abort
 from dotenv import load_dotenv
 
-from db import init_db, save_message
+from db import init_db, save_message, get_conversations, get_messages_by_phone
 from sales_agent import run_sales_pipeline
 
 load_dotenv(r"C:\plus-agents\.env")
@@ -28,7 +28,6 @@ print("===========================")
 
 SEEN_MESSAGE_IDS = set()
 
-# Inicializa tabla al arrancar
 try:
     init_db()
     print("✅ Base de datos inicializada")
@@ -131,16 +130,13 @@ def webhook_post():
 
                         print(f"➡️ INBOUND from {from_wa} ({contact_name}): {inbound_text}")
 
-                        # Guardar inbound
                         try:
                             save_message(from_wa, contact_name, inbound_text, "inbound")
                         except Exception as db_in_error:
                             print("❌ Error guardando inbound en DB:", repr(db_in_error))
 
-                        # Ejecutar agente
                         reply = run_sales_pipeline(inbound_text, from_wa)
 
-                        # Si el agente devuelve tupla, tomar la respuesta
                         if isinstance(reply, tuple):
                             reply_text = safe_str(reply[0])
                         else:
@@ -151,13 +147,11 @@ def webhook_post():
 
                         print(f"⬅️ OUTBOUND to {from_wa}: {reply_text}")
 
-                        # Guardar outbound
                         try:
                             save_message(from_wa, contact_name, reply_text, "outbound")
                         except Exception as db_out_error:
                             print("❌ Error guardando outbound en DB:", repr(db_out_error))
 
-                        # Enviar WhatsApp
                         wa_send_text(from_wa, reply_text)
 
                     except Exception as msg_error:
@@ -167,6 +161,129 @@ def webhook_post():
         print("❌ ERROR webhook:", repr(e))
 
     return jsonify({"ok": True}), 200
+
+
+@app.get("/panel")
+def panel():
+    try:
+        conversations = get_conversations()
+    except Exception as e:
+        return f"Error cargando conversaciones: {repr(e)}", 500
+
+    html = """
+    <!doctype html>
+    <html lang="es">
+    <head>
+        <meta charset="utf-8">
+        <title>Panel WhatsApp</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; background: #f5f6f8; }
+            .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+            h1 { margin-bottom: 20px; }
+            .card {
+                background: white; border-radius: 12px; padding: 16px 18px; margin-bottom: 12px;
+                box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            }
+            .top { display: flex; justify-content: space-between; gap: 16px; }
+            .name { font-weight: bold; font-size: 16px; }
+            .phone { color: #666; font-size: 13px; margin-top: 4px; }
+            .msg { margin-top: 10px; color: #222; }
+            a { text-decoration: none; color: inherit; }
+            .time { color: #666; white-space: nowrap; font-size: 13px; }
+        </style>
+    </head>
+    <body>
+        <div class="wrap">
+            <h1>Conversaciones WhatsApp</h1>
+            {% if conversations %}
+                {% for c in conversations %}
+                    <a href="/panel/chat/{{ c.phone }}">
+                        <div class="card">
+                            <div class="top">
+                                <div>
+                                    <div class="name">{{ c.contact_name or "Sin nombre" }}</div>
+                                    <div class="phone">{{ c.phone }}</div>
+                                </div>
+                                <div class="time">{{ c.last_time }}</div>
+                            </div>
+                            <div class="msg">{{ c.last_message }}</div>
+                        </div>
+                    </a>
+                {% endfor %}
+            {% else %}
+                <div class="card">Todavía no hay conversaciones guardadas.</div>
+            {% endif %}
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(html, conversations=conversations)
+
+
+@app.get("/panel/chat/<phone>")
+def panel_chat(phone):
+    try:
+        messages = get_messages_by_phone(phone)
+    except Exception as e:
+        return f"Error cargando chat: {repr(e)}", 500
+
+    if not messages:
+        abort(404)
+
+    contact_name = messages[0].get("contact_name") or "Sin nombre"
+
+    html = """
+    <!doctype html>
+    <html lang="es">
+    <head>
+        <meta charset="utf-8">
+        <title>Chat {{ phone }}</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; background: #efeae2; }
+            .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
+            .header {
+                background: white; border-radius: 12px; padding: 16px 20px; margin-bottom: 18px;
+                box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            }
+            .title { font-size: 20px; font-weight: bold; }
+            .sub { color: #666; margin-top: 4px; }
+            .chat { display: flex; flex-direction: column; gap: 12px; }
+            .bubble {
+                max-width: 75%; padding: 12px 14px; border-radius: 12px;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.08); white-space: pre-wrap;
+            }
+            .inbound { align-self: flex-start; background: white; }
+            .outbound { align-self: flex-end; background: #d9fdd3; }
+            .meta { font-size: 12px; color: #666; margin-top: 6px; }
+            .back { display: inline-block; margin-bottom: 16px; color: #0b57d0; text-decoration: none; }
+        </style>
+    </head>
+    <body>
+        <div class="wrap">
+            <a class="back" href="/panel">← Volver al panel</a>
+            <div class="header">
+                <div class="title">{{ contact_name }}</div>
+                <div class="sub">{{ phone }}</div>
+            </div>
+
+            <div class="chat">
+                {% for m in messages %}
+                    <div class="bubble {{ m.direction }}">
+                        {{ m.message }}
+                        <div class="meta">{{ m.direction }} · {{ m.created_at }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(
+        html,
+        phone=phone,
+        contact_name=contact_name,
+        messages=messages
+    )
 
 
 if __name__ == "__main__":
